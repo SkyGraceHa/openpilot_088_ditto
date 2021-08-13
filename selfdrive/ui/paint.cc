@@ -22,6 +22,8 @@
 #include "selfdrive/hardware/hw.h"
 
 #include "selfdrive/ui/ui.h"
+#include  <time.h> // opkr
+#include  <string.h> // opkr
 
 static void ui_print(UIState *s, int x, int y,  const char* fmt, ... )
 {
@@ -92,15 +94,15 @@ static void ui_draw_circle_image(const UIState *s, int center_x, int center_y, i
   }
 }
 
-static void draw_lead(UIState *s, const cereal::ModelDataV2::LeadDataV2::Reader &lead_data, const vertex_data &vd) {
+static void draw_lead(UIState *s, const cereal::ModelDataV2::LeadDataV3::Reader &lead_data, const vertex_data &vd) {
   // Draw lead car indicator
   auto [x, y] = vd;
 
   float fillAlpha = 0;
   float speedBuff = 10.;
   float leadBuff = 40.;
-  float d_rel = lead_data.getXyva()[0];
-  float v_rel = lead_data.getXyva()[2];
+  float d_rel = lead_data.getX()[0];
+  float v_rel = lead_data.getV()[0];
   if (d_rel < leadBuff) {
     fillAlpha = 255*(1.0-(d_rel/leadBuff));
     if (v_rel < 0) {
@@ -253,12 +255,12 @@ static void ui_draw_world(UIState *s) {
   // Draw lead indicators if openpilot is handling longitudinal
   //if (s->scene.longitudinal_control) {
   if (true) {
-    auto lead_one = (*s->sm)["modelV2"].getModelV2().getLeads()[0];
-    auto lead_two = (*s->sm)["modelV2"].getModelV2().getLeads()[1];
+    auto lead_one = (*s->sm)["modelV2"].getModelV2().getLeadsV3()[0];
+    auto lead_two = (*s->sm)["modelV2"].getModelV2().getLeadsV3()[1];
     if (lead_one.getProb() > .5) {
       draw_lead(s, lead_one, s->scene.lead_vertices[0]);
     }
-    if (lead_two.getProb() > .5 && (std::abs(lead_one.getXyva()[0] - lead_two.getXyva()[0]) > 3.0)) {
+    if (lead_two.getProb() > .5 && (std::abs(lead_one.getX()[0] - lead_two.getX()[0]) > 3.0)) {
       draw_lead(s, lead_two, s->scene.lead_vertices[1]);
     }
   }
@@ -878,7 +880,7 @@ static void bb_ui_draw_measures_right(UIState *s, int bb_x, int bb_y, int bb_w )
   int label_fontSize=15*0.8;
   int uom_fontSize = 15*0.8;
   int bb_uom_dx =  (int)(bb_w /2 - uom_fontSize*2.5);
-  auto lead_one = (*s->sm)["modelV2"].getModelV2().getLeads()[0];
+  auto lead_one = (*s->sm)["modelV2"].getModelV2().getLeadsV3()[0];
 
   //add visual radar relative distance
   if (true) {
@@ -888,17 +890,17 @@ static void bb_ui_draw_measures_right(UIState *s, int bb_x, int bb_y, int bb_w )
     if (lead_one.getProb() > .5) {
       //show RED if less than 5 meters
       //show orange if less than 15 meters
-      if((int)(lead_one.getXyva()[0]) < 15) {
+      if((int)(lead_one.getX()[0]) < 15) {
         val_color = COLOR_ORANGE_ALPHA(200);
       }
-      if((int)(lead_one.getXyva()[0]) < 5) {
+      if((int)(lead_one.getX()[0]) < 5) {
         val_color = COLOR_RED_ALPHA(200);
       }
       // lead car relative distance is always in meters
-      if((float)(lead_one.getXyva()[0]) < 10) {
-        snprintf(val_str, sizeof(val_str), "%.1f", (float)lead_one.getXyva()[0]);
+      if((float)(lead_one.getX()[0]) < 10) {
+        snprintf(val_str, sizeof(val_str), "%.1f", (float)lead_one.getX()[0]);
       } else {
-        snprintf(val_str, sizeof(val_str), "%d", (int)lead_one.getXyva()[0]);
+        snprintf(val_str, sizeof(val_str), "%d", (int)lead_one.getX()[0]);
       }
 
     } else {
@@ -919,17 +921,17 @@ static void bb_ui_draw_measures_right(UIState *s, int bb_x, int bb_y, int bb_w )
     if (lead_one.getProb() > .5) {
       //show Orange if negative speed (approaching)
       //show Orange if negative speed faster than 5mph (approaching fast)
-      if((int)(lead_one.getXyva()[2]) < 0) {
+      if((int)(lead_one.getV()[0]) < 0) {
         val_color = nvgRGBA(255, 188, 3, 200);
       }
-      if((int)(lead_one.getXyva()[2]) < -5) {
+      if((int)(lead_one.getV()[0]) < -5) {
         val_color = nvgRGBA(255, 0, 0, 200);
       }
       // lead car relative speed is always in meters
       if (s->scene.is_metric) {
-         snprintf(val_str, sizeof(val_str), "%d", (int)(lead_one.getXyva()[2] * 3.6 + 0.5));
+         snprintf(val_str, sizeof(val_str), "%d", (int)(lead_one.getV()[0] * 3.6 + 0.5));
       } else {
-         snprintf(val_str, sizeof(val_str), "%d", (int)(lead_one.getXyva()[2] * 2.2374144 + 0.5));
+         snprintf(val_str, sizeof(val_str), "%d", (int)(lead_one.getV()[0] * 2.2374144 + 0.5));
       }
     } else {
        snprintf(val_str, sizeof(val_str), "-");
@@ -1170,13 +1172,80 @@ static void ui_draw_vision_car(UIState *s) {
   }
 }
 
+// draw date/time
+void draw_kr_date_time(UIState *s) {
+  int rect_w = 600;
+  const int rect_h = 50;
+  int rect_x = s->fb_w/2 - rect_w/2;
+  const int rect_y = 0;
+  char dayofweek[10];
+
+  // Get local time to display
+  time_t t = time(NULL);
+  struct tm tm = *localtime(&t);
+  char now[50];
+  if (tm.tm_wday == 0) {
+    strcpy(dayofweek, "SUN");
+  } else if (tm.tm_wday == 1) {
+    strcpy(dayofweek, "MON");
+  } else if (tm.tm_wday == 2) {
+    strcpy(dayofweek, "TUE");
+  } else if (tm.tm_wday == 3) {
+    strcpy(dayofweek, "WED");
+  } else if (tm.tm_wday == 4) {
+    strcpy(dayofweek, "THU");
+  } else if (tm.tm_wday == 5) {
+    strcpy(dayofweek, "FRI");
+  } else if (tm.tm_wday == 6) {
+    strcpy(dayofweek, "SAT");
+  }
+
+  if (s->scene.kr_date_show && s->scene.kr_time_show) {
+    snprintf(now,sizeof(now),"%04d-%02d-%02d %s %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, dayofweek, tm.tm_hour, tm.tm_min, tm.tm_sec);
+  } else if (s->scene.kr_date_show) {
+    snprintf(now,sizeof(now),"%04d-%02d-%02d %s", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, dayofweek);
+  } else if (s->scene.kr_time_show) {
+    snprintf(now,sizeof(now),"%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
+  }
+
+  nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+  nvgBeginPath(s->vg);
+  nvgRoundedRect(s->vg, rect_x, rect_y, rect_w, rect_h, 0);
+  nvgFillColor(s->vg, nvgRGBA(0, 0, 0, 0));
+  nvgFill(s->vg);
+  nvgStrokeColor(s->vg, nvgRGBA(255,255,255,0));
+  nvgStrokeWidth(s->vg, 0);
+  nvgStroke(s->vg);
+
+  nvgFontSize(s->vg, 50);
+  nvgFontFace(s->vg, "sans-semibold");
+  nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 200));
+  nvgText(s->vg, s->fb_w/2, rect_y, now, NULL);
+}
+
 // live camera offset adjust by OPKR
-static void ui_draw_live_camera_offet_adjust(UIState *s) {
+static void ui_draw_live_tune_panel(UIState *s) {
   const int width = 160;
   const int height = 160;
   const int x_start_pos_l = s->fb_w/2 - width*2;
   const int x_start_pos_r = s->fb_w/2 + width*2;
-  const int y_pos = 700;
+  const int y_pos = 750;
+  //left symbol_above
+  nvgBeginPath(s->vg);
+  nvgMoveTo(s->vg, x_start_pos_l, y_pos - 175);
+  nvgLineTo(s->vg, x_start_pos_l - width + 30, y_pos + height/2 - 175);
+  nvgLineTo(s->vg, x_start_pos_l, y_pos + height - 175);
+  nvgClosePath(s->vg);
+  nvgFillColor(s->vg, nvgRGBA(255,153,153,150));
+  nvgFill(s->vg);
+  //right symbol above
+  nvgBeginPath(s->vg);
+  nvgMoveTo(s->vg, x_start_pos_r, y_pos - 175);
+  nvgLineTo(s->vg, x_start_pos_r + width - 30, y_pos + height/2 - 175);
+  nvgLineTo(s->vg, x_start_pos_r, y_pos + height - 175);
+  nvgClosePath(s->vg);
+  nvgFillColor(s->vg, nvgRGBA(255,153,153,150));
+  nvgFill(s->vg);
   //left symbol
   nvgBeginPath(s->vg);
   nvgMoveTo(s->vg, x_start_pos_l, y_pos);
@@ -1191,16 +1260,64 @@ static void ui_draw_live_camera_offet_adjust(UIState *s) {
   nvgLineTo(s->vg, x_start_pos_r + width - 30, y_pos + height/2);
   nvgLineTo(s->vg, x_start_pos_r, y_pos + height);
   nvgClosePath(s->vg);
+
+  nvgFillColor(s->vg, COLOR_WHITE_ALPHA(150));
+  nvgFill(s->vg);
+
+  //param value
+  nvgFontSize(s->vg, 150);
+  nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+  if (s->scene.live_tune_panel_list == 0) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%+0.3f", s->scene.cameraOffset*0.001);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "CameraOffset");
+  } else if (s->scene.live_tune_panel_list == 1 && s->scene.lateralControlMethod == 0) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.2f", s->scene.pidKp*0.01);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "Pid: Kp");
+  } else if (s->scene.live_tune_panel_list == 2 && s->scene.lateralControlMethod == 0) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.3f", s->scene.pidKi*0.001);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "Pid: Ki");
+  } else if (s->scene.live_tune_panel_list == 3 && s->scene.lateralControlMethod == 0) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.2f", s->scene.pidKd*0.01);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "Pid: Kd");
+  } else if (s->scene.live_tune_panel_list == 4 && s->scene.lateralControlMethod == 0) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.5f", s->scene.pidKf*0.00001);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "Pid: Kf");
+  } else if (s->scene.live_tune_panel_list == 1 && s->scene.lateralControlMethod == 1) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.1f", s->scene.indiInnerLoopGain*0.1);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "INDI: ILGain");
+  } else if (s->scene.live_tune_panel_list == 2 && s->scene.lateralControlMethod == 1) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.1f", s->scene.indiOuterLoopGain*0.1);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "INDI: OLGain");
+  } else if (s->scene.live_tune_panel_list == 3 && s->scene.lateralControlMethod == 1) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.1f", s->scene.indiTimeConstant*0.1);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "INDI: TConst");
+  } else if (s->scene.live_tune_panel_list == 4 && s->scene.lateralControlMethod == 1) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.1f", s->scene.indiActuatorEffectiveness*0.1);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "INDI: ActEffct");
+  } else if (s->scene.live_tune_panel_list == 1 && s->scene.lateralControlMethod == 2) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.0f", s->scene.lqrScale*1.0);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "LQR: Scale");
+  } else if (s->scene.live_tune_panel_list == 2 && s->scene.lateralControlMethod == 2) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.3f", s->scene.lqrKi*0.001);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "LQR: Ki");
+  } else if (s->scene.live_tune_panel_list == 3 && s->scene.lateralControlMethod == 2) {
+    ui_print(s, s->fb_w/2, y_pos + height/2, "%0.5f", s->scene.lqrDcGain*0.00001);
+    nvgFontSize(s->vg, 75);
+    ui_print(s, s->fb_w/2, y_pos - 95, "LQR: DcGain");
+  }
   nvgFillColor(s->vg, nvgRGBA(171,242,0,150));
   nvgFill(s->vg);
-  //param value
-  nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-  nvgFontSize(s->vg, 150);
-  nvgFillColor(s->vg, COLOR_WHITE_ALPHA(200));
-  ui_print(s, s->fb_w/2, y_pos + height/2, "%+0.3f", s->scene.live_camera_offset*0.001);
-  nvgFontSize(s->vg, 75);
-  nvgFillColor(s->vg, COLOR_WHITE_ALPHA(200));
-  ui_print(s, s->fb_w/2, y_pos - 50, "CameraOffset");
 }
 
 static void ui_draw_vision(UIState *s) {
@@ -1217,8 +1334,11 @@ static void ui_draw_vision(UIState *s) {
       ui_draw_vision_car(s);
     }
   }
-  if (s->scene.live_camera_offset_enable) {
-      ui_draw_live_camera_offet_adjust(s);
+  if (s->scene.live_tune_panel_enable) {
+    ui_draw_live_tune_panel(s);
+  }
+  if (s->scene.kr_date_show || s->scene.kr_time_show) {
+    draw_kr_date_time(s);
   }
 }
 

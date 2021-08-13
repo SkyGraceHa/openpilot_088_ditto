@@ -185,6 +185,10 @@ DevicePanel::DevicePanel(QWidget* parent) : QWidget(parent) {
     });
   }
 
+  main_layout->addWidget(horizontal_line());
+
+  main_layout->addWidget(new OpenpilotView());
+
   for (auto btn : {dcamBtn, retrainingBtn, regulatoryBtn}) {
     if (btn) {
       main_layout->addWidget(horizontal_line());
@@ -423,8 +427,6 @@ QWidget * network_panel(QWidget * parent) {
   QVBoxLayout *layout = new QVBoxLayout(w);
   layout->setSpacing(30);
 
-  layout->addWidget(new OpenpilotView());
-  layout->addWidget(horizontal_line());
   // wifi + tethering buttons
   auto wifiBtn = new ButtonControl("WiFi 설정", "열기");
   QObject::connect(wifiBtn, &ButtonControl::clicked, [=]() { HardwareEon::launch_wifi(); });
@@ -496,6 +498,8 @@ UserPanel::UserPanel(QWidget* parent) : QWidget(parent) {
   layout->addWidget(new BlinkThreshold());
   layout->addWidget(new ApksEnableToggle());
   layout->addWidget(new RunNaviOnBootToggle());
+  layout->addWidget(new KRDateToggle());
+  layout->addWidget(new KRTimeToggle());
 
   layout->addWidget(horizontal_line());
   layout->addWidget(new LabelControl("주행설정", ""));
@@ -554,7 +558,7 @@ UserPanel::UserPanel(QWidget* parent) : QWidget(parent) {
   //layout->addWidget(new LabelControl(car_model, ""));
 
   layout->addWidget(horizontal_line());
-  layout->addWidget(new LabelControl("판다 값", "주의要"));
+  layout->addWidget(new LabelControl("판다 세이프티 값", ""));
   layout->addWidget(new MaxSteer());
   layout->addWidget(new MaxRTDelta());
   layout->addWidget(new MaxRateUp());
@@ -575,7 +579,6 @@ TuningPanel::TuningPanel(QWidget* parent) : QWidget(parent) {
   // OPKR
   layout->addWidget(new LabelControl("튜닝메뉴", ""));
   layout->addWidget(new CameraOffset());
-  layout->addWidget(new LiveCameraOffsetToggle());
   layout->addWidget(new LiveSteerRatioToggle());
   layout->addWidget(new SRBaseControl());
   layout->addWidget(new SRMaxControl());
@@ -598,7 +601,7 @@ TuningPanel::TuningPanel(QWidget* parent) : QWidget(parent) {
 
   layout->addWidget(new LabelControl("제어메뉴", ""));
   layout->addWidget(new LateralControl());
-  layout->addWidget(new LiveTuneToggle());
+  layout->addWidget(new LiveTunePanelToggle());
   QString lat_control = QString::fromStdString(Params().get("LateralControlMethod", false));
   if (lat_control == "0") {
     layout->addWidget(new PidKp());
