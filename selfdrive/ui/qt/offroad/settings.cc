@@ -537,6 +537,7 @@ UserPanel::UserPanel(QWidget* parent) : QWidget(parent) {
   layout->addWidget(new PrebuiltToggle());
   layout->addWidget(new FPTwoToggle());
   layout->addWidget(new LDWSToggle());
+  layout->addWidget(new FCATypeToggle());
   layout->addWidget(new GearDToggle());
   layout->addWidget(new ComIssueToggle());
   layout->addWidget(new WhitePandaSupportToggle());
@@ -552,6 +553,7 @@ UserPanel::UserPanel(QWidget* parent) : QWidget(parent) {
   layout->addWidget(calokbtn);
   layout->addWidget(horizontal_line());
   layout->addWidget(new CarRecognition());
+  layout->addWidget(new CarSelectCombo());
   //layout->addWidget(new CarForceSet());
   //QString car_model = QString::fromStdString(Params().get("CarModel", false));
   //layout->addWidget(new LabelControl("현재차량모델", ""));
@@ -627,6 +629,8 @@ TuningPanel::TuningPanel(QWidget* parent) : QWidget(parent) {
   layout->addWidget(new LabelControl("롱컨트롤메뉴", ""));
   layout->addWidget(new DynamicTR());
   layout->addWidget(new CruiseGapTR());
+  layout->addWidget(new RadarLongHelperToggle());
+  layout->addWidget(new LongTypeToggle());
 }
 
 void SettingsWindow::showEvent(QShowEvent *event) {
