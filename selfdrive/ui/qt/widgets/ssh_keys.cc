@@ -229,6 +229,7 @@ OpenpilotView::OpenpilotView() : AbstractControl("오픈파일럿 주행화면 �
     color: #E4E4E4;
     background-color: #393939;
   )");
+
   btn.setFixedSize(250, 100);
   hlayout->addWidget(&btn);
 
@@ -363,11 +364,12 @@ CarSelectCombo::CarSelectCombo() : AbstractControl("차량강제인식", "핑거
     color: white;
     background-color: #393939;
     border-style: solid;
-    border: 1px solid #1e1e1e;
-    border-radius: 5;
-    padding: 1px 0px 1px 5px; 
+    border: 0px solid #1e1e1e;
+    border-radius: 0;
+    width: 100px;
   )");
 
+  combobox.addItem("차량을 선택하세요");
   combobox.addItem("GENESIS");
   combobox.addItem("GENESIS_G70");
   combobox.addItem("GENESIS_G80");
@@ -406,19 +408,47 @@ CarSelectCombo::CarSelectCombo() : AbstractControl("차량강제인식", "핑거
   combobox.addItem("SOUL_EV");
   combobox.addItem("MOHAVE");
 
-  combobox.view().setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded).
+  combobox.setFixedWidth(700);
+
+  btn.setStyleSheet(R"(
+    padding: 0;
+    border-radius: 50px;
+    font-size: 35px;
+    font-weight: 500;
+    color: #E4E4E4;
+    background-color: #393939;
+  )");
+
+  btn.setFixedSize(150, 100);
+
+  QObject::connect(&btn, &QPushButton::clicked, [=]() {
+    if (btn.text() == "설정제거") {
+      if (ConfirmationDialog::confirm("차량 강제 설정을 해제하시겠습니까?", this)) {
+        params.remove("CarModel");
+        params.remove("CarModelAbb");
+        combobox.setCurrentIndex(0);
+        refresh();
+      }
+    }
+  });
+
+  //combobox.view()->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
   hlayout->addWidget(&combobox);
+  hlayout->addWidget(&btn);
 
-  QObject::connect(&combobox, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), [=](int index)
+  QObject::connect(&combobox, static_cast<void(QComboBox::*)(int)>(&QComboBox::activated), [=](int index)
   {
-    combobox->itemData(combobox->currentIndex());
+    combobox.itemData(combobox.currentIndex());
     QString str = combobox.currentText();
-    if (ConfirmationDialog::confirm("선택한 차량으로 강제 설정하시겠습니까?", this)) {
-      params.put("CarModel", str.toStdString());
-      params.put("CarModelAbb", str.toStdString());
-      QProcess::execute("/data/openpilot/car_force_set.sh");
+    if (combobox.currentIndex() != 0) {
+      if (ConfirmationDialog::confirm(str + "(으)로 강제 설정하시겠습니까?", this)) {
+        params.put("CarModel", str.toStdString());
+        params.put("CarModelAbb", str.toStdString());
+        QProcess::execute("/data/openpilot/car_force_set.sh");
+      }
     }
+    refresh();
   });
   refresh();
 }
@@ -427,6 +457,13 @@ void CarSelectCombo::refresh() {
   QString selected_carname = QString::fromStdString(params.get("CarModelAbb"));
   int index = combobox.findText(selected_carname);
   if (index >= 0) combobox.setCurrentIndex(index);
+  if (selected_carname.length()) {
+    btn.setEnabled(true);
+    btn.setText("설정제거");
+  } else {
+    btn.setEnabled(false);
+    btn.setText("<-선택");
+  }
 }
 
 //UI
